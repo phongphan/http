@@ -72,9 +72,9 @@ define open class <http-connection> (<basic-stream>)
 end class <http-connection>;
 
 define method initialize
-    (conn :: <http-connection>, #rest socket-args, #key host :: <string>)
+    (conn :: <http-connection>, #rest socket-args, #key host :: <string>, ssl? :: <boolean>)
   next-method();
-  conn.connection-socket := apply(make, <tcp-socket>, socket-args);
+  conn.connection-socket := apply(make, <tcp-socket>, ssl?: ssl?, socket-args);
   conn.write-buffer := make(<byte-string>,
                              size: conn.outgoing-chunk-size, fill: ' ');
 
@@ -517,6 +517,7 @@ define function make-http-connection
   if (instance?(host, <string>) & any?(member?(_, host), "/:"))
     host := parse-url(host);
   end;
+  let ssl? :: <boolean> = #f;
   if (instance?(host, <uri>))
     let uri :: <uri> = host;
     host := uri-host(uri);
@@ -524,11 +525,13 @@ define function make-http-connection
       error("The URI provided, %s, must have a host component.",
             build-uri(uri));
     end if;
+    let scheme = lowercase(uri.uri-scheme);
+    ssl? := string-equal?("https", uri.uri-scheme);
     port := port | uri.uri-port;
     if (~port)
       // TODO(cgay): The uri library should supply port defaults for schemes
       // that specify it, so we don't have to do this here.
-      select (uri.uri-scheme by  string-equal-ic?)
+      select (scheme by string-equal?)
         "http", "" => port := $default-http-port;
         "https"    => port := $default-https-port;
         otherwise => error("The URI provided, %s, must be an http or https URI.",
@@ -536,7 +539,7 @@ define function make-http-connection
       end;
     end;
   end if;
-  apply(make, <http-connection>, host: host, port: port, initargs)
+  apply(make, <http-connection>, host: host, port: port, ssl?: ssl?, initargs)
 end function make-http-connection;
 
 // with-http-connection(conn = url) blah end;
